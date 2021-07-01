@@ -1,7 +1,7 @@
 {
   "name": "@smikhalevski/pipe",
   "version": "1.0.0",
-  "description": "",
+  "description": "The callback piping utility.",
   "main": "./lib/index-cjs.js",
   "module": "./lib/index.js",
   "types": "./lib/index.d.ts",

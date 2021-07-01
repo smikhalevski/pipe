@@ -111,7 +111,7 @@ export class Pipe<I, O> {
 
   public static fanOut<I, R extends Array<unknown>>(...pipes: AsyncPipes<I, R>): Pipe<I, Promise<R>>;
 
-  public static fanOut<I, R extends Array<unknown>>(...pipes: Pipes<I, R>) {
+  public static fanOut<I, R extends Array<unknown>>(...pipes: AsyncPipes<I, R>) {
     return new Pipe<I, Async<R>>((value) => {
 
       const arr = pipes.map((pipe) => pipe.send(value));
@@ -168,14 +168,23 @@ export class Pipe<I, O> {
    */
   public to<R, A extends Array<unknown> = []>(cb: (...args: A) => Async<R>, ...args: AsyncPipedArgs<O, A>): Pipe<I, Promise<R>>;
 
-  public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<unknown>): Pipe<I, R> {
+  public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<unknown>) {
     let pipe: Pipe<O, R>;
     if (cb instanceof Pipe) {
       pipe = cb;
     } else {
       pipe = Pipe.to(cb, ...args);
     }
-    return Pipe.to((value) => pipe.send(this.cb(value)));
+    return new Pipe<I, Async<R>>((value) => pipe.send(this.cb(value)));
+  }
+
+  public fanOut<R extends Array<unknown>>(...pipes: Pipes<O, R>): Pipe<I, R>;
+
+  public fanOut<R extends Array<unknown>>(...pipes: AsyncPipes<O, R>): Pipe<I, Promise<R>>;
+
+  public fanOut<R extends Array<unknown>>(...pipes: AsyncPipes<O, R>) {
+    const pipe = Pipe.fanOut<O, R>(...pipes);
+    return new Pipe<I, Async<R>>((value) => pipe.send(this.cb(value)));
   }
 
   /**

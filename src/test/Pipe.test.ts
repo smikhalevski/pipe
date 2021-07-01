@@ -111,4 +111,15 @@ describe('Pipe', () => {
 
     await expect(pipe.send('__')).resolves.toBe('__123');
   });
+
+  it('passes input to multiple pipes', async () => {
+    const pipe = Pipe
+        .to<string>()
+        .fanOut(
+            Pipe.to((value: string) => parseInt(value, 10)),
+            Pipe.to((value: string) => Promise.resolve(value + ' days')),
+        );
+
+    await expect(pipe.send('123')).resolves.toEqual([123, '123 days']);
+  });
 });
