@@ -1,75 +1,126 @@
-type PackPipes<I, R extends Array<unknown>> = {
-  [K in keyof R]: Pipe<I, R[K]>;
+type Async<T> = Promise<T> | T;
+
+type Pipes<I, A extends Array<unknown>> = {
+  [K in keyof A]: Pipe<I, A[K]>;
 };
 
-type PackArgs<I, R extends Array<unknown>> = {
-  [K in keyof R]: Pipe<I, R[K]> | R[K];
+type AsyncPipes<I, A extends Array<unknown>> = {
+  [K in keyof A]: Pipe<I, Async<A[K]>>;
+};
+
+type AsyncArgs<A extends Array<unknown>> = {
+  [K in keyof A]: Async<A[K]>;
+};
+
+type PipedArgs<I, A extends Array<unknown>> = {
+  [K in keyof A]: Pipe<I, A[K]> | A[K];
+};
+
+type AsyncPipedArgs<I, A extends Array<unknown>> = {
+  [K in keyof A]: Pipe<I, Async<A[K]>> | Async<A[K]>;
 };
 
 export class Pipe<I, O> {
 
-  public static any = Pipe.from((value: any) => value);
+  /**
+   * The identity pipe that takes any argument and returns it as is.
+   */
+  public static any = Pipe.to((value: any) => value);
 
   /**
    * Create the pipe that consumes a value of the given type and returns it as is.
+   *
+   * @see Pipe.any
    */
-  public static from<I>(): Pipe<I, I>;
+  public static to<I>(): Pipe<I, I>;
 
   /**
    * Create the pipe that maps value with a callback. Value would be provided as a first argument while other arguments
    * may be populated from rest arguments of this method.
    */
-  public static from<I, O, A extends Array<unknown>>(cb: (value: I, ...args: A) => O, ...args: A): Pipe<I, O>;
+  public static to<I, O, A extends Array<unknown> = []>(cb: (value: I, ...args: A) => O, ...args: A): Pipe<I, O>;
+
+  /**
+   * Create the pipe that maps value with a callback. Value would be provided as a first argument while other arguments
+   * may be populated from rest arguments of this method.
+   */
+  public static to<I, O, A extends Array<unknown> = []>(cb: (value: I, ...args: A) => Async<O>, ...args: AsyncArgs<A>): Pipe<I, Promise<O>>;
 
   /**
    * Create the pipe that maps value with callback. Value would be provided to pipes that are declared as varargs of
    * this method and then sent to the arguments of the callback at the same positions.
    */
-  public static from<I, O, A extends Array<unknown>>(cb: (...args: A) => O, ...args: PackArgs<I, A>): Pipe<I, O>;
+  public static to<I, O, A extends Array<unknown> = []>(cb: (...args: A) => O, ...args: PipedArgs<I, A>): Pipe<I, O>;
 
-  public static from<I, O>(cb?: (...args: Array<unknown>) => O, ...args: Array<unknown>): Pipe<I, O> {
+  /**
+   * Create the pipe that maps value with callback. Value would be provided to pipes that are declared as varargs of
+   * this method and then sent to the arguments of the callback at the same positions.
+   */
+  public static to<I, O, A extends Array<unknown> = []>(cb: (...args: A) => Async<O>, ...args: AsyncPipedArgs<I, A>): Pipe<I, Promise<O>>;
+
+  public static to<I, O>(cb?: (...args: Array<unknown>) => O, ...args: Array<unknown>) {
     if (!cb) {
       return Pipe.any;
     }
 
-    return new Pipe((value) => {
+    return new Pipe<I, Async<O>>((value) => {
       const argCount = args.length;
 
       if (argCount === 0) {
         return cb(value);
       }
 
-      let a: Array<unknown> | undefined;
+      let arr: Array<unknown> | undefined;
+      let async = false;
 
       for (let i = 0; i < argCount; ++i) {
         const arg = args[i];
 
+        let result = arg;
+
         if (arg instanceof Pipe) {
 
-          a ||= args.slice(0);
+          arr ||= args.slice(0);
 
-          if (a[i] !== arg) {
+          if (arr[i] !== arg) {
             continue;
           }
 
-          const result = a[i] = arg.send(value);
+          result = arr[i] = arg.send(value);
 
           for (let j = i + 1; j < argCount; ++j) {
             if (args[j] === arg) {
-              a[j] = result;
+              arr[j] = result;
             }
           }
         }
+
+        async ||= result instanceof Promise;
       }
 
-      a ||= [value, ...args];
+      arr ||= [value, ...args];
 
-      return cb(...a);
+      if (async) {
+        return Promise.all(arr).then((a) => cb(...a));
+      }
+      return cb(...arr);
     });
   }
 
-  public static fanOut<I, R extends Array<unknown>>(...pipes: PackPipes<I, R>): Pipe<I, R> {
-    return new Pipe((value) => pipes.map((pipe) => pipe.send(value)) as R);
+  public static fanOut<I, R extends Array<unknown>>(...pipes: Pipes<I, R>): Pipe<I, R>;
+
+  public static fanOut<I, R extends Array<unknown>>(...pipes: AsyncPipes<I, R>): Pipe<I, Promise<R>>;
+
+  public static fanOut<I, R extends Array<unknown>>(...pipes: Pipes<I, R>) {
+    return new Pipe<I, Async<R>>((value) => {
+
+      const arr = pipes.map((pipe) => pipe.send(value));
+
+      if (arr.some((value) => value instanceof Promise)) {
+        return Promise.all(arr) as Promise<R>;
+      }
+      return arr as R;
+    });
   }
 
   /**
@@ -95,23 +146,36 @@ export class Pipe<I, O> {
    * Redirect output to a callback which accepts output of this pipe as a first argument and may accept an arbitrary
    * number of other arguments.
    */
-  public to<R, A extends Array<unknown>>(cb: (value: O, ...args: A) => R, ...args: A): Pipe<I, R>;
+  public to<R, A extends Array<unknown> = []>(cb: (value: O, ...args: A) => R, ...args: A): Pipe<I, R>;
+
+  /**
+   * Redirect output to a callback which accepts output of this pipe as a first argument and may accept an arbitrary
+   * number of other arguments.
+   */
+  public to<R, A extends Array<unknown> = []>(cb: (value: O, ...args: A) => Async<R>, ...args: AsyncArgs<A>): Pipe<I, Promise<R>>;
 
   /**
    * Redirect output to a callback with an arbitrary set of arguments. Some of the arguments may be defined as pipes,
    * in this case those pipes receive an output of this pipe as a value and their output is passed to callback as
    * arguments.
    */
-  public to<R, A extends Array<unknown>>(cb: (...args: A) => R, ...args: PackArgs<O, A>): Pipe<I, R>;
+  public to<R, A extends Array<unknown> = []>(cb: (...args: A) => R, ...args: PipedArgs<O, A>): Pipe<I, R>;
+
+  /**
+   * Redirect output to a callback with an arbitrary set of arguments. Some of the arguments may be defined as pipes,
+   * in this case those pipes receive an output of this pipe as a value and their output is passed to callback as
+   * arguments.
+   */
+  public to<R, A extends Array<unknown> = []>(cb: (...args: A) => Async<R>, ...args: AsyncPipedArgs<O, A>): Pipe<I, Promise<R>>;
 
   public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<unknown>): Pipe<I, R> {
     let pipe: Pipe<O, R>;
     if (cb instanceof Pipe) {
       pipe = cb;
     } else {
-      pipe = Pipe.from(cb, ...args);
+      pipe = Pipe.to(cb, ...args);
     }
-    return Pipe.from((value) => pipe.send(this.cb(value)));
+    return Pipe.to((value) => pipe.send(this.cb(value)));
   }
 
   /**

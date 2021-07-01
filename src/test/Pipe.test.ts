@@ -4,100 +4,111 @@ describe('Pipe', () => {
 
   const concat = (str: string, arg: string) => str + arg;
 
-  it('calls provided function only after get was called', () => {
-    const fn = jest.fn();
-    const p = new Pipe(fn);
-    expect(fn).not.toHaveBeenCalled();
-    p.send(null);
-    expect(fn).toHaveBeenCalledTimes(1);
+  it('invokes callback only after send was called', () => {
+    const cbMock = jest.fn();
+    const pipe = new Pipe(cbMock);
+
+    expect(cbMock).not.toHaveBeenCalled();
+
+    pipe.send(null);
+
+    expect(cbMock).toHaveBeenCalledTimes(1);
   });
 
   it('allows piping callbacks without arguments', () => {
-    expect(
-        Pipe.from((v) => v + '++')
-            .to((v) => '--' + v)
-            .send('a'),
-    ).toBe('--a++');
+    const pipe: Pipe<string, string> = Pipe
+        .to<string>()
+        .to((value) => value + '++')
+        .to((value) => '--' + value);
+
+    expect(pipe.send('a')).toBe('--a++');
   });
 
   it('pipe can be called multiple times providing same results', () => {
-    const p = Pipe.from<number>().to((v) => v + 1).to((v) => v / 2);
+    const pipe: Pipe<number, number> = Pipe
+        .to<number>()
+        .to((value) => value + 1)
+        .to((value) => value / 2);
 
-    expect(p.send(3)).toBe(2);
-    expect(p.send(4)).toBe(2.5);
+    expect(pipe.send(3)).toBe(2);
+    expect(pipe.send(4)).toBe(2.5);
   });
 
   it('allows piping callbacks with arguments', () => {
-    expect(
-        Pipe.from<string>()
-            .to(concat, 'b')
-            .to(concat, 'c')
-            .send('a'),
-    ).toBe('abc');
-  });
+    const pipe = Pipe
+        .to(concat, 'b')
+        .to(concat, 'c');
 
-  it('provides shorthand constructor function', () => {
-    expect(
-        Pipe.from<string>()
-            .to(concat, 'b')
-            .to(concat, 'c')
-            .send('a'),
-    ).toBe('abc');
+    expect(pipe.send('a')).toBe('abc');
   });
 
   it('pipes can be nested', () => {
-    expect(
-        Pipe.from<string>()
-            .to(concat, 'b')
-            .to(Pipe.from<string>()
-                .to(concat, 'c')
-                .to(Pipe.from<string>()
-                    .to(concat, 'd')
-                    .to(concat, 'e'),
-                )
-                .to(concat, 'f'),
+    const pipe = Pipe
+        .to(concat, 'b')
+        .to(Pipe
+            .to(concat, 'c')
+            .to(Pipe
+                .to(concat, 'd')
+                .to(concat, 'e'),
             )
-            .to(concat, 'g')
-            .send('a'),
-    ).toBe('abcdefg');
+            .to(concat, 'f'),
+        )
+        .to(concat, 'g');
+
+    expect(pipe.send('a')).toBe('abcdefg');
   });
 
   it('piped value can be directed to another argument position with pipe placeholder', () => {
-    expect(
-        Pipe.from<string>()
-            .to(
-                (a1: number, a2: string) => `_${a1}_${a2}_`,
-                111,
-                Pipe.any,
-            )
-            .send('a'),
-    ).toBe('_111_a_');
+    const pipe = Pipe
+        .to<string>()
+        .to(
+            (a1: number, a2: string) => `_${a1}_${a2}_`,
+            111,
+            Pipe.any,
+        );
+
+    expect(pipe.send('a')).toBe('_111_a_');
   });
 
   it('piped value can be inserted multiple times via placeholder', () => {
-    expect(
-        Pipe.from<string>()
-            .to(
-                (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
-                111,
-                Pipe.any,
-                222,
-                Pipe.any,
-            )
-            .send('a'),
-    ).toBe('_111_a_222_a_');
+    const pipe = Pipe
+        .to<string>()
+        .to(
+            (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
+            111,
+            Pipe.any,
+            222,
+            Pipe.any,
+        );
+
+    expect(pipe.send('a')).toBe('_111_a_222_a_');
   });
 
   it('piped value can be piped before becoming an argument', () => {
-    expect(
-        Pipe.from(
-            (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
-            111,
-            Pipe.from((v) => '++' + v),
-            222,
-            Pipe.from((v) => '--' + v),
-        )
-            .send('a'),
-    ).toBe('_111_++a_222_--a_');
+    const pipe = Pipe.to(
+        (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
+        111,
+        Pipe.to((v) => '++' + v),
+        222,
+        Pipe.to((v) => '--' + v),
+    );
+
+    expect(pipe.send('a')).toBe('_111_++a_222_--a_');
+  });
+
+  it('resolves Promise arguments', async () => {
+    const pipe = Pipe.to((value: number, prefix: string) => prefix + value, Promise.resolve('__'));
+
+    await expect(pipe.send(123)).resolves.toBe('__123');
+  });
+
+  it('resolves async Pipe arguments', async () => {
+    const pipe = Pipe
+        .to((a1: number, a2: string) => a2 + a1,
+            123,
+            Pipe.to((value) => Promise.resolve('' + value)),
+        );
+
+    await expect(pipe.send('__')).resolves.toBe('__123');
   });
 });
