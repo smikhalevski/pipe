@@ -1,31 +1,33 @@
-const identity = <T>(arg: T): T => arg;
-
 type UnfoldArgs<A extends Array<unknown>, I> = {
   [K in keyof A]: A[K] extends Pipe<I, infer O> ? O : A[K];
 };
 
 export class Pipe<I, O> {
 
-  /**
-   * Create pipe that consumes any value and doesn't change it.
-   */
-  public static any<I>(): Pipe<I, I> {
-    return Pipe.to(identity);
-  }
+  public static any = Pipe.from((value: any) => value);
 
   /**
-   * Create pipe that maps value with a callback. Value would be provided as a first argument while other arguments may
-   * be populated from rest arguments of this method.
+   * Create the pipe that consumes a value of the given type and returns it as is.
    */
-  public static to<I, O, A extends Array<any>>(cb: (value: I, ...args: A) => O, ...args: A): Pipe<I, O>;
+  public static from<I>(): Pipe<I, I>;
 
   /**
-   * Create pipe that maps value with callback. Value would be provided to pipes that are declared as varargs of this
-   * method and then sent to the arguments of the callback at the same positions.
+   * Create the pipe that maps value with a callback. Value would be provided as a first argument while other arguments
+   * may be populated from rest arguments of this method.
    */
-  public static to<I, O, A extends Array<any>>(cb: (...args: UnfoldArgs<A, I>) => O, ...args: A): Pipe<I, O>;
+  public static from<I, O, A extends Array<unknown>>(cb: (value: I, ...args: A) => O, ...args: A): Pipe<I, O>;
 
-  public static to<I, O>(cb: (...args: Array<any>) => O, ...args: Array<any>): Pipe<I, O> {
+  /**
+   * Create the pipe that maps value with callback. Value would be provided to pipes that are declared as varargs of
+   * this method and then sent to the arguments of the callback at the same positions.
+   */
+  public static from<I, O, A extends Array<unknown>>(cb: (...args: UnfoldArgs<A, I>) => O, ...args: A): Pipe<I, O>;
+
+  public static from<I, O>(cb?: (...args: Array<unknown>) => O, ...args: Array<unknown>): Pipe<I, O> {
+    if (!cb) {
+      return Pipe.any;
+    }
+
     return new Pipe((value) => {
       const argCount = args.length;
 
@@ -33,31 +35,30 @@ export class Pipe<I, O> {
         return cb(value);
       }
 
-      let a: Array<any> | undefined;
+      let a: Array<unknown> | undefined;
 
       for (let i = 0; i < argCount; ++i) {
-        if (args[i] instanceof Pipe) {
-          if (a) {
-            if (a[i] !== args[i]) {
-              continue;
-            }
-          } else {
-            a = args.slice(0);
+        const arg = args[i];
+
+        if (arg instanceof Pipe) {
+
+          a ||= args.slice(0);
+
+          if (a[i] !== arg) {
+            continue;
           }
 
-          a[i] = a[i].send(value);
+          const result = a[i] = arg.send(value);
 
           for (let j = i + 1; j < argCount; ++j) {
-            if (args[j] === args[i]) {
-              a[j] = a[i];
+            if (args[j] === arg) {
+              a[j] = result;
             }
           }
         }
       }
 
-      if (!a) {
-        a = [value].concat(args);
-      }
+      a ||= [value, ...args];
 
       return cb(...a);
     });
@@ -86,26 +87,23 @@ export class Pipe<I, O> {
    * Redirect output to a callback which accepts output of this pipe as a first argument and may accept an arbitrary
    * number of other arguments.
    */
-  public to<R, A extends Array<any>>(cb: (value: O, ...args: A) => R, ...args: A): Pipe<I, R>;
+  public to<R, A extends Array<unknown>>(cb: (value: O, ...args: A) => R, ...args: A): Pipe<I, R>;
 
   /**
    * Redirect output to a callback with an arbitrary set of arguments. Some of the arguments may be defined as pipes,
    * in this case those pipes receive an output of this pipe as a value and their output is passed to callback as
    * arguments.
    */
-  public to<R, A extends Array<any>>(cb: (...args: UnfoldArgs<A, O>) => R, ...args: A): Pipe<I, R>;
+  public to<R, A extends Array<unknown>>(cb: (...args: UnfoldArgs<A, O>) => R, ...args: A): Pipe<I, R>;
 
-  public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<any>): Pipe<I, R> {
+  public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<unknown>): Pipe<I, R> {
     let pipe: Pipe<O, R>;
     if (cb instanceof Pipe) {
       pipe = cb;
     } else {
-      // const a: Parameters<typeof Pipe.to> = [cb];
-      // a.push(...args);
-
-      pipe = Pipe.to(cb, ...args);
+      pipe = Pipe.from(cb, ...args);
     }
-    return Pipe.to((value) => pipe.send(this.cb(value)));
+    return Pipe.from((value) => pipe.send(this.cb(value)));
   }
 
   /**

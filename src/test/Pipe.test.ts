@@ -14,14 +14,14 @@ describe('Pipe', () => {
 
   it('allows piping callbacks without arguments', () => {
     expect(
-        Pipe.to((v) => v + '++')
+        Pipe.from((v) => v + '++')
             .to((v) => '--' + v)
             .send('a'),
     ).toBe('--a++');
   });
 
   it('pipe can be called multiple times providing same results', () => {
-    const p = Pipe.any<number>().to((v) => v + 1).to((v) => v / 2);
+    const p = Pipe.from<number>().to((v) => v + 1).to((v) => v / 2);
 
     expect(p.send(3)).toBe(2);
     expect(p.send(4)).toBe(2.5);
@@ -29,7 +29,7 @@ describe('Pipe', () => {
 
   it('allows piping callbacks with arguments', () => {
     expect(
-        Pipe.any<string>()
+        Pipe.from<string>()
             .to(concat, 'b')
             .to(concat, 'c')
             .send('a'),
@@ -38,7 +38,7 @@ describe('Pipe', () => {
 
   it('provides shorthand constructor function', () => {
     expect(
-        Pipe.any<string>()
+        Pipe.from<string>()
             .to(concat, 'b')
             .to(concat, 'c')
             .send('a'),
@@ -47,11 +47,11 @@ describe('Pipe', () => {
 
   it('pipes can be nested', () => {
     expect(
-        Pipe.any<string>()
+        Pipe.from<string>()
             .to(concat, 'b')
-            .to(Pipe.any<string>()
+            .to(Pipe.from<string>()
                 .to(concat, 'c')
-                .to(Pipe.any<string>()
+                .to(Pipe.from<string>()
                     .to(concat, 'd')
                     .to(concat, 'e'),
                 )
@@ -64,11 +64,11 @@ describe('Pipe', () => {
 
   it('piped value can be directed to another argument position with pipe placeholder', () => {
     expect(
-        Pipe.any<string>()
+        Pipe.from<string>()
             .to(
                 (a1: number, a2: string) => `_${a1}_${a2}_`,
                 111,
-                Pipe.any<string>(),
+                Pipe.from<string>(),
             )
             .send('a'),
     ).toBe('_111_a_');
@@ -76,13 +76,13 @@ describe('Pipe', () => {
 
   it('piped value can be inserted multiple times via placeholder', () => {
     expect(
-        Pipe.any<string>()
+        Pipe.from<string>()
             .to(
                 (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
                 111,
-                Pipe.any<string>(),
+                Pipe.from<string>(),
                 222,
-                Pipe.any<string>(),
+                Pipe.from<string>(),
             )
             .send('a'),
     ).toBe('_111_a_222_a_');
@@ -90,12 +90,12 @@ describe('Pipe', () => {
 
   it('piped value can be piped before becoming an argument', () => {
     expect(
-        Pipe.to(
+        Pipe.from(
             (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
             111,
-            Pipe.to((v) => '++' + v),
+            Pipe.from((v) => '++' + v),
             222,
-            Pipe.to((v) => '--' + v),
+            Pipe.from((v) => '--' + v),
         )
             .send('a'),
     ).toBe('_111_++a_222_--a_');
