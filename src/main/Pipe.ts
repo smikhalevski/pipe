@@ -1,5 +1,9 @@
-type UnfoldArgs<A extends Array<unknown>, I> = {
-  [K in keyof A]: A[K] extends Pipe<I, infer O> ? O : A[K];
+type PackPipes<I, R extends Array<unknown>> = {
+  [K in keyof R]: Pipe<I, R[K]>;
+};
+
+type PackArgs<I, R extends Array<unknown>> = {
+  [K in keyof R]: Pipe<I, R[K]> | R[K];
 };
 
 export class Pipe<I, O> {
@@ -21,7 +25,7 @@ export class Pipe<I, O> {
    * Create the pipe that maps value with callback. Value would be provided to pipes that are declared as varargs of
    * this method and then sent to the arguments of the callback at the same positions.
    */
-  public static from<I, O, A extends Array<unknown>>(cb: (...args: UnfoldArgs<A, I>) => O, ...args: A): Pipe<I, O>;
+  public static from<I, O, A extends Array<unknown>>(cb: (...args: A) => O, ...args: PackArgs<I, A>): Pipe<I, O>;
 
   public static from<I, O>(cb?: (...args: Array<unknown>) => O, ...args: Array<unknown>): Pipe<I, O> {
     if (!cb) {
@@ -64,6 +68,10 @@ export class Pipe<I, O> {
     });
   }
 
+  public static fanOut<I, R extends Array<unknown>>(...pipes: PackPipes<I, R>): Pipe<I, R> {
+    return new Pipe((value) => pipes.map((pipe) => pipe.send(value)) as R);
+  }
+
   /**
    * The callback invoked by this {@link Pipe} instance.
    */
@@ -94,7 +102,7 @@ export class Pipe<I, O> {
    * in this case those pipes receive an output of this pipe as a value and their output is passed to callback as
    * arguments.
    */
-  public to<R, A extends Array<unknown>>(cb: (...args: UnfoldArgs<A, O>) => R, ...args: A): Pipe<I, R>;
+  public to<R, A extends Array<unknown>>(cb: (...args: A) => R, ...args: PackArgs<O, A>): Pipe<I, R>;
 
   public to<R>(cb: ((...args: Array<any>) => R) | Pipe<O, R>, ...args: Array<unknown>): Pipe<I, R> {
     let pipe: Pipe<O, R>;

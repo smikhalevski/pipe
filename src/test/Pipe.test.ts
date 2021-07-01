@@ -68,7 +68,7 @@ describe('Pipe', () => {
             .to(
                 (a1: number, a2: string) => `_${a1}_${a2}_`,
                 111,
-                Pipe.from<string>(),
+                Pipe.any,
             )
             .send('a'),
     ).toBe('_111_a_');
@@ -80,9 +80,9 @@ describe('Pipe', () => {
             .to(
                 (a1: number, a2: string, a3: number, a4: string) => `_${a1}_${a2}_${a3}_${a4}_`,
                 111,
-                Pipe.from<string>(),
+                Pipe.any,
                 222,
-                Pipe.from<string>(),
+                Pipe.any,
             )
             .send('a'),
     ).toBe('_111_a_222_a_');
