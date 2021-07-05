@@ -1,4 +1,4 @@
-# pipe
+# pipe [![build](https://github.com/smikhalevski/pipe/actions/workflows/master.yml/badge.svg?branch=master&event=push)](https://github.com/smikhalevski/pipe/actions/workflows/master.yml)
 
 The callback piping utility.
 
